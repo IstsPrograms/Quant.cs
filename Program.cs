@@ -28,7 +28,8 @@
                 {
                     if (item.name.ToLower() == argument.Split()[0])
                     {
-                        item.Execute(argument.Replace($"{argument.Split()[0]} ", "")); // If command name equals first word of input, execute command
+                        string[] argumentList = { argument.Replace($"{argument.Split()[0]} ", ""), pathFormat};
+                        item.Execute(argumentList); // If command name equals first word of input, execute command
                     }
                 }
             }
