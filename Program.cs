@@ -7,14 +7,14 @@ namespace Quant.Cs {
         {
             string currentPath = Environment.CurrentDirectory;
             Environment.CurrentDirectory = normalPath;
-            File.WriteAllText("userslocale.json", JsonSerializer.Serialize(users, typeof(List<User>), new JsonSerializerOptions()
+            File.WriteAllText("users.json", JsonSerializer.Serialize(users, typeof(List<User>), new JsonSerializerOptions()
             {
                 IncludeFields = true,
             }));
             Environment.CurrentDirectory = currentPath;
             Console.WriteLine("Users saved!");
         }
-        public static List<User> CreateUser(User currentUser, List<User> userslocale)
+        public static List<User> CreateUser(User currentUser, List<User> users)
         {
             if(currentUser.Permissions == QuantPermissions.Root)
             {
@@ -30,7 +30,7 @@ namespace Quant.Cs {
                     int permissions;
                     int.TryParse(Console.ReadKey().KeyChar.ToString(), out permissions);
                     QuantPermissions givenPermission = (QuantPermissions)permissions;
-                    userslocale.Add(new User(name, password, givenPermission));
+                    users.Add(new User(name, password, givenPermission));
                     Console.WriteLine("\nNew user created!");
                 }
                 catch
@@ -38,23 +38,23 @@ namespace Quant.Cs {
                     Console.WriteLine($"Error: wrong data given");
                 }
             }
-            return userslocale;
+            return users;
         }
         public static User? Authenticate()
         {
-            if(File.Exists("userslocale.json"))
+            if(File.Exists("users.json"))
             {
                 List<User> users = new List<User>();
                 try
                 {
-                    users = JsonSerializer.Deserialize(File.ReadAllText("userslocale.json"), typeof(List<User>), new JsonSerializerOptions()
+                    users = JsonSerializer.Deserialize(File.ReadAllText("users.json"), typeof(List<User>), new JsonSerializerOptions()
                     {
                         IncludeFields = true,
                     }) as List<User>;
                 }
                 catch(Exception ex)
                 {
-                    Console.WriteLine($"userslocale.json have no user data: {ex}");
+                    Console.WriteLine($"users.json have no user data: {ex}");
                     return null;
                 }
                 for(int i = 0; i < users.Count; i++)
@@ -88,7 +88,7 @@ namespace Quant.Cs {
             }
             else
             {
-                Console.WriteLine("userslocale.json not found. Launching system from root...");
+                Console.WriteLine("users.json not found. Launching system from root...");
                 return null;
             }
             return null;
@@ -106,9 +106,9 @@ namespace Quant.Cs {
             var res = AuthenticationModule.Authenticate();
             if (res == null)
             {
-                List<User> userslocale = new List<User>();
-                userslocale = AuthenticationModule.CreateUser(new User("Root", "Root", QuantPermissions.Root), userslocale);
-                AuthenticationModule.WriteUsers(userslocale, Environment.CurrentDirectory);
+                List<User> users = new List<User>();
+                users = AuthenticationModule.CreateUser(new User("Root", "Root", QuantPermissions.Root), users);
+                AuthenticationModule.WriteUsers(users, Environment.CurrentDirectory);
                 res = AuthenticationModule.Authenticate();
             }
             currentUser = res;
