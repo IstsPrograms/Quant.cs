@@ -2,11 +2,12 @@ Example of IQuantCommand
 ```cs
 public class ExampleCommand : IQuantCommand
 {
-    public string name { get; set; } = "Example";
-    public string description { get; set; } = "An example command";
+    public string Name { get; set; } = "Example";
+    public string Description { get; set; } = "An example command";
+    public QuantPermissions permissionLevel { get; } = QuantPermissions.None;
     public void Execute(params string[] arg)
     {
-        Console.WriteLine($"I'm an Example Command, args: {arg[0]}, my description: {description}"); 
+        Console.WriteLine($"I'm an Example Command, args: {arg[0]}, my description: {Description} and i have path format: {arg[1]}");
     }
 }
 ```
