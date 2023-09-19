@@ -1,21 +1,46 @@
-Example of IQuantCommand
+# How to create Quant object:
 ```cs
-public class ExampleCommand : IQuantCommand
+using Quant.cs;
+var commands = new List<IQuantCommand>();
+var core = new QuantCore(commands, "Name of your program", "Version of your program");
+```
+# Command example:
+```cs
+using Quant.cs;
+var exampleCommand = new QuantCommand()
 {
-    public string Name { get; set; } = "Example";
-    public string Description { get; set; } = "An example command";
-    public QuantPermissions permissionLevel { get; } = QuantPermissions.None;
-    public void Execute(params string[] arg)
+    Name = "example",
+    Description = "Example Command",
+    OnCommandExecution = new OnCommandExecutionHandler((ref QuantCore quantCore, string s) =>
     {
-        Console.WriteLine($"I'm an Example Command, args: {arg[0]}, my description: {Description} and i have path format: {arg[1]}");
+        return "Output";
     }
 }
 ```
-How to create Quant object and launch:
+**or**
 ```cs
-var quant = new QuantCore(new List<IQuantCommand>()
+public class Command : IQuantCommand
 {
-    new ExampleCommand()
+    public string Name { get; set; } = "example";
+    public string Description { get; set; } = "Example Command";
+    public string Execute(ref QuantCore core, string args)
+    {
+        return "Output";
+    };
+}
+```
+# You can also make custom I/O
+**Input:**
+```cs
+core.OnInputEvent += new OnInputEventHandler(() =>
+{
+    // Logic of your input. Also you must return string.
 });
-quant.Launch();
+```
+**Output:**
+```cs
+core.OnOutputEvent += new OnOutputEventHandler((string output) =>
+{
+    // Logic of your output
+});
 ```
