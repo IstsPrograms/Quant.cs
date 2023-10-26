@@ -2,11 +2,11 @@
 ```cs
 using Quant.cs;
 var commands = new List<IQuantCommand>();
-var core = new QuantCore(commands, "Name of your program", "Version of your program");
+bool useMultithreading = false; // Replace with 'true' if you want to use multi threading
+var core = new QuantCore(commands, "Name of your program", "Version of your program", useMultithreading);
 ```
 # Command example:
 ```cs
-using Quant.cs;
 var exampleCommand = new QuantCommand()
 {
     Name = "example",
@@ -43,4 +43,44 @@ core.OnOutputEvent += new OnOutputEventHandler((string output) =>
 {
     // Logic of your output
 });
+```
+
+# Notifications
+**Send notification:**
+```cs
+core.GetNotification(new Notification("Title", "Description", SomeData, Sender)); // SomeData and Sender are not necessary
+```
+
+**Custom notification handler:**
+```cs
+core.OnNotificationEvent += new OnNotificationEventHandler((ref QuantCore core, ref Notification notification) =>
+{
+    // Logic of your notification handler
+});
+```
+
+# Quant Server
+
+**How to create Quant Server**
+```cs
+using Quant.cs;
+var commands = new List<IQuantCommand>();
+string host = "http://127.0.0.1:8080/"; // Replace 'http://127.0.0.1:8080/' with other if necessary
+var core = new QuantCore(commands, "Name of your Quant Server", "Version of your Quant Server", false, host);
+core.Launch(); // Start server
+```
+
+**Custom request handler:**
+```cs
+// core is server-side
+core.OnRequestEvent = new OnRequestHandler((ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore) =>
+{
+    // Logic of your request handler
+});
+```
+
+**How to send request to Quant Server**
+```cs
+// core is client-side
+core.SendRequest("command", "request uri");
 ```
