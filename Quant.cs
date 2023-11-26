@@ -311,7 +311,7 @@ public class Notification
 // TESTING FEATURE!!! IT CAN WORK NOT PROPERLY!!!
 
 public delegate void OnRequestHandler(ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore);
-public delegate string OnRequestSendingHandler(string cmd, string address);
+public delegate string OnRequestSendingHandler(string cmd, string address, QuantRequestType quantRequestType);
 
 public class ServerQuantCore : QuantCore
 {
