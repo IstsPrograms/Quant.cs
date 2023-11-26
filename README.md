@@ -1,4 +1,4 @@
-# How to create Quant object:
+# QuantCore object:
 ```cs
 using Quant.cs;
 var commands = new List<IQuantCommand>();
@@ -28,6 +28,18 @@ public class Command : IQuantCommand
         return "Output";
     };
 }
+```
+# Merge QuantCore with other
+```cs
+core.MergeWith(otherCore);
+```
+**or**
+```cs
+core.MergeWith(addressOfQuantServerHere);
+```
+**or**
+``cs
+QuantCore.MergeCores(firstCore, secondCore); // returns new QuantCore
 ```
 # You can also make custom I/O
 **Input:**
@@ -79,8 +91,17 @@ core.OnRequestEvent = new OnRequestHandler((ref HttpListenerRequest request, ref
 });
 ```
 
+**Custom request sender:**
+```cs
+core.OnRequestSendingEvent = new OnRequestSendingHandler((string cmd, string address, QuantRequestType quantRequest) =>
+{
+    // Logic here
+});
+```
+
 **How to send request to Quant Server**
 ```cs
 // core is client-side
-core.SendRequest("command", "request uri");
+core.SendRequest("command", "request uri"); // Returns response
 ```
+
