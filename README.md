@@ -38,7 +38,7 @@ core.MergeWith(otherCore);
 core.MergeWith(addressOfQuantServerHere);
 ```
 **or**
-``cs
+```cs
 QuantCore.MergeCores(firstCore, secondCore); // returns new QuantCore
 ```
 # You can also make custom I/O
