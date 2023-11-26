@@ -219,7 +219,7 @@ public class QuantCore
         }
         else
         {
-            return OnRequestSendingEvent.Invoke(cmd, address);
+            return OnRequestSendingEvent.Invoke(cmd, address, QuantRequestType.ExecuteCommand);
         }
     }
 
