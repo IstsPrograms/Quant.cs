@@ -1,6 +1,6 @@
-﻿using System.Diagnostics;
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Quant.cs;
 
@@ -11,6 +11,8 @@ public delegate void OnOutputEventHandler(string output);
 public delegate string OnInputEventHandler();
 public delegate void OnNotificationEventHandler(ref QuantCore core, ref Notification notification);
 
+#pragma warning disable CS8600 
+
 public class QuantCore
 {
     public readonly string Name; // Your program's name
@@ -18,7 +20,6 @@ public class QuantCore
 
     protected readonly Stack<List<IQuantCommand>> _snapshots;
     public List<IQuantCommand> Commands;
-    protected readonly List<Thread>? _threads;
     protected byte _warnings;
     protected readonly bool _useThreading;
 
@@ -26,6 +27,7 @@ public class QuantCore
     public OnOutputEventHandler? OnOutputEvent; // Used for custom output
     public OnInputEventHandler? OnInputEvent;   // Used for custom input
     public OnNotificationEventHandler? OnNotificationEvent; // Used for handling notifications
+    public OnRequestSendingHandler? OnRequestSendingEvent; // Used for custom request sending
 
     protected bool _launched = true;
     
@@ -47,17 +49,41 @@ public class QuantCore
             InvokeOutput($"Got notification!\nTitle: {notification.Title}\nDescription: {notification.Description}\nSender: {senderName}");
         }
     }
-   
+
+    public static QuantCore MergeCores(QuantCore first, QuantCore second)
+    {
+        return new QuantCore([..first.Commands, ..second.Commands], first.Name, first.Version, first._useThreading);
+    }
+
+    public void MergeWith(QuantCore other)
+    {
+        _snapshots.Push(Commands);
+        Commands = [.. Commands, ..other.Commands];
+    }
+
+    public void MergeWith(string address)
+    {
+        string serverInfo = SendRequest("", address, QuantRequestType.GetInfo);
+        QuantServerInfo toMergeWith = JsonSerializer.Deserialize(serverInfo, typeof(QuantServerInfo), new JsonSerializerOptions()
+        {
+            IncludeFields = true
+        }) as QuantServerInfo;
+        
+        List<IQuantCommand> tempCommands = new List<IQuantCommand>();
+        foreach(var cmd in toMergeWith.Commands)
+        {
+            tempCommands.Add(new DirectedQuantCommand(cmd.Name, address));
+        }
+        _snapshots.Push(Commands);
+        Commands = [.. Commands, .. tempCommands];
+    }
+    
     public QuantCore(List<IQuantCommand> commands, string name = "Quant.cs", string version = "1.0", bool useThreading = false)
     {
         Commands = commands;
         Name = name;
         Version = version;
         _useThreading = useThreading;
-        if (useThreading)
-        {
-            _threads = new List<Thread>();
-        }
         // Init script (Executes all commands in file init.sh)
         if (File.Exists("init.sh"))
         {
@@ -165,31 +191,48 @@ public class QuantCore
     }
 
 
-    public virtual void SendRequest(string cmd, string address)
+    public virtual string SendRequest(string cmd, string address, QuantRequestType requestType)
     {
-        using(HttpClient client = new HttpClient())
+        if (OnRequestSendingEvent == null)
         {
-            var response = client.SendAsync(new HttpRequestMessage()
+            using (HttpClient client = new HttpClient())
             {
-                Content = new StringContent(
-                    new QuantRequest()
-                    {
-                        CommandToExecute = cmd
-                    }.GetJson()
-                ),
-                RequestUri = new Uri(address),
-                Method = HttpMethod.Post
-            }).GetAwaiter().GetResult();
-            string result;
-            using(StreamReader reader = new StreamReader(response.Content.ReadAsStream()))
-            {
-                result = reader.ReadToEnd();
+                var response = client.SendAsync(new HttpRequestMessage()
+                {
+                    Content = new StringContent(
+                        new QuantRequest()
+                        {
+                            CommandToExecute = cmd,
+                            RequestType = requestType
+                        }.GetJson()
+                    ),
+                    RequestUri = new Uri(address),
+                    Method = HttpMethod.Post
+                }).GetAwaiter().GetResult();
+                string result;
+                using (StreamReader reader = new StreamReader(response.Content.ReadAsStream()))
+                {
+                    result = reader.ReadToEnd();
+                }
+                return result;
             }
-            InvokeOutput(result);
+        }
+        else
+        {
+            return OnRequestSendingEvent.Invoke(cmd, address);
         }
     }
 
-   
+    public virtual void Stop(string? message = null)
+    {
+        _launched = false;
+        if(_useThreading)
+        {
+            throw new NotSupportedException("'Stop' is not supported: enabled threading");
+        }
+        if(message != null) { InvokeOutput(message); }
+    }
+
     public virtual void Launch() 
     {
         while (_launched)
@@ -198,11 +241,10 @@ public class QuantCore
             string input = InvokeInput();
             if (input != "")
             {
-                if (_useThreading && _threads != null)
+                if (_useThreading)
                 {
                     var thread = new Thread(ignoreIt => ExecuteCommand(input));
-                    _threads.Add(thread);
-                    _threads[^1].Start();
+                    thread.Start();
                 }
                 else
                 {
@@ -232,6 +274,24 @@ public class QuantCommand : IQuantCommand
     }
 }
 
+public class DirectedQuantCommand : IQuantCommand
+{
+    public string Name { get; set; }
+    public string Description { get; set; } = "Server command";
+    private string Address { get; set; }
+
+    public DirectedQuantCommand(string name, string address)
+    {
+        Address = address;
+        Name = name;
+    }
+
+    public string Execute(ref QuantCore core, string args)
+    {
+        return core.SendRequest(Name, Address, QuantRequestType.ExecuteCommand);
+    }
+}
+
 public class Notification
 {
     public string Title { get; set; }
@@ -248,14 +308,15 @@ public class Notification
     }
 }
 
-// TESTING FEATURE!!! IT CAN NOT WORK PROPERLY!!!
+// TESTING FEATURE!!! IT CAN WORK NOT PROPERLY!!!
 
 public delegate void OnRequestHandler(ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore);
+public delegate string OnRequestSendingHandler(string cmd, string address);
 
 public class ServerQuantCore : QuantCore
 {
     public string Host { get; set; }
-    public OnRequestHandler? OnRequestEvent;
+    public OnRequestHandler? OnRequestEvent { get; set; }
 
 
     public ServerQuantCore(List<IQuantCommand> commands, string name = "Quant.cs", string version = "1.0", bool useThreading = false, string host = "http://127.0.0.1:8080/") : base(commands, name, version, useThreading)
@@ -307,7 +368,7 @@ public class ServerQuantCore : QuantCore
 
 
 
-    public void InvokeHandleRequest(ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore)
+    public virtual void InvokeHandleRequest(ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore)
     {
         InvokeOutput("Processing: Got request");
         if(OnRequestEvent == null)
@@ -320,15 +381,46 @@ public class ServerQuantCore : QuantCore
             try
             {
                 var req = QuantRequest.GetFromJson(content);
-                var result = ExecuteCommand(req.CommandToExecute);
-                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(result);
-                response.ContentLength64 = buffer.Length;
-                response.OutputStream.Write(buffer, 0, buffer.Length);
-                response.Close();
-                InvokeOutput("Done: Responded");
+                switch(req.RequestType)
+                {
+                    case QuantRequestType.ExecuteCommand:
+                        var result = ExecuteCommand(req.CommandToExecute);
+                        byte[] buffer = System.Text.Encoding.UTF8.GetBytes(result);
+                        response.ContentLength64 = buffer.Length;
+                        response.OutputStream.Write(buffer, 0, buffer.Length);
+                        response.Close();
+                        InvokeOutput("Done: Responded");
+                        break;
+                    case QuantRequestType.GetInfo:
+                        List<QuantCommand> transformed = new List<QuantCommand>();
+                        foreach (var cmd in Commands)
+                        {
+                            transformed.Add(new QuantCommand() { Name = cmd.Name, Description = cmd.Name });
+                        }
+                        result = JsonSerializer.Serialize(new QuantServerInfo()
+                        {
+                            Name = Name,
+                            Version = Version,
+                            Commands = transformed
+                        }, typeof(QuantServerInfo), new JsonSerializerOptions()
+                        {
+                            IncludeFields = true
+                        });
+                        buffer = System.Text.Encoding.UTF8.GetBytes(result);
+                        response.ContentLength64 = buffer.Length;
+                        response.OutputStream.Write(buffer, 0, buffer.Length);
+                        response.Close();
+                        InvokeOutput("Done: Responded");
+                        break;
+                }
+                
             }
             catch
             {
+                byte[] buffer = System.Text.Encoding.UTF8.GetBytes("Non-Quant request");
+                response.ContentLength64 = buffer.Length;
+                response.OutputStream.Write(buffer, 0, buffer.Length);
+                response.Close();
                 InvokeOutput("Error: Non-Quant request");
             }
         }
@@ -362,6 +454,7 @@ public class QuantRequest
 {
     public string CommandToExecute { get; set; }
     public object? Data { get; set; }
+    public QuantRequestType RequestType { get; set; } = QuantRequestType.ExecuteCommand;
     public string GetJson()
     {
         return JsonSerializer.Serialize(this, new JsonSerializerOptions()
@@ -376,4 +469,17 @@ public class QuantRequest
             IncludeFields = true
         }) as QuantRequest;
     }
+}
+public enum QuantRequestType
+{
+    ExecuteCommand = 0,
+    GetInfo = 1
+}
+
+public class QuantServerInfo
+{
+    public string Name { get; set; }
+    public string Version { get; set; }
+    public string Host { get; set; }
+    public List<QuantCommand> Commands { get; set; }
 }
