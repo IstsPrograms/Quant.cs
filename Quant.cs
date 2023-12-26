@@ -1,6 +1,5 @@
 ﻿using System.Net;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Quant.cs;
 
@@ -10,6 +9,7 @@ public delegate string OnCommandExecutionHandler(ref QuantCore core, string args
 public delegate void OnOutputEventHandler(string output);
 public delegate string OnInputEventHandler();
 public delegate void OnNotificationEventHandler(ref QuantCore core, ref Notification notification);
+public delegate void OnNoCommandFoundEventHandler(string commandName);
 
 #pragma warning disable CS8600 
 
@@ -19,6 +19,7 @@ public class QuantCore
     public readonly string Version; // Your program's version
 
     protected readonly Stack<List<IQuantCommand>> _snapshots;
+    public Dictionary<string, Pin> Pins;
     public List<IQuantCommand> Commands;
     protected byte _warnings;
     protected readonly bool _useThreading;
@@ -28,6 +29,7 @@ public class QuantCore
     public OnInputEventHandler? OnInputEvent;   // Used for custom input
     public OnNotificationEventHandler? OnNotificationEvent; // Used for handling notifications
     public OnRequestSendingHandler? OnRequestSendingEvent; // Used for custom request sending
+    public OnNoCommandFoundEventHandler? OnNoCommandFoundEvent;
 
     protected bool _launched = true;
     
@@ -52,13 +54,16 @@ public class QuantCore
 
     public static QuantCore MergeCores(QuantCore first, QuantCore second)
     {
-        return new QuantCore([..first.Commands, ..second.Commands], first.Name, first.Version, first._useThreading);
+        return new QuantCore([.. first.Commands, .. second.Commands], first.Name, first.Version, first._useThreading) 
+        {
+            Pins = first.Pins
+        };
     }
 
     public void MergeWith(QuantCore other)
     {
         _snapshots.Push(Commands);
-        Commands = [.. Commands, ..other.Commands];
+        Commands = [.. Commands, .. other.Commands];
     }
 
     public void MergeWith(string address)
@@ -78,12 +83,24 @@ public class QuantCore
         Commands = [.. Commands, .. tempCommands];
     }
     
+    public void AddPin(Pin pin, string name)
+    {
+        Pins.Add(name, pin);
+    }
+
+    public void AddPin(object? obj, string name)
+    {
+        Pins.Add(name, Pin.Create(obj));
+    }
+
     public QuantCore(List<IQuantCommand> commands, string name = "Quant.cs", string version = "1.0", bool useThreading = false)
     {
         Commands = commands;
         Name = name;
         Version = version;
+        Pins = new();
         _useThreading = useThreading;
+        
         // Init script (Executes all commands in file init.sh)
         if (File.Exists("init.sh"))
         {
@@ -185,8 +202,19 @@ public class QuantCore
                         Commands = quant.Commands; // Synchronization
                     }
                 }
+                lock(Pins)
+                {
+                    if(quant.Pins != Pins)
+                    {
+                        Pins = quant.Pins;
+                    }
+                }
                 return;
             }
+        }
+        if(OnNoCommandFoundEvent != null)
+        {
+            OnNoCommandFoundEvent.Invoke(command.Split()[0]);
         }
     }
 
@@ -308,10 +336,24 @@ public class Notification
     }
 }
 
+public class Pin
+{
+    public object? Value { get; set; }
+    public Type Type { get; set; }
+    public static Pin Create<T>(T value) 
+    {
+        return new Pin()
+        {
+            Value = value,
+            Type = value.GetType(),
+        };
+    }
+}
+
 // TESTING FEATURE!!! IT CAN WORK NOT PROPERLY!!!
 
 public delegate void OnRequestHandler(ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore);
-public delegate string OnRequestSendingHandler(string cmd, string address, QuantRequestType quantRequestType);
+public delegate string OnRequestSendingHandler(string cmd, string address, QuantRequestType quantRequest);
 
 public class ServerQuantCore : QuantCore
 {

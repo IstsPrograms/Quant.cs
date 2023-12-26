@@ -1,107 +1,175 @@
-# QuantCore object:
-```cs
-using Quant.cs;
-var commands = new List<IQuantCommand>();
-bool useMultithreading = false; // Replace with 'true' if you want to use multi threading
-var core = new QuantCore(commands, "Name of your program", "Version of your program", useMultithreading);
-```
-# Command example:
+# General
+
+**Quant Commands**
+
+There are two ways to create command
+
+First:
 ```cs
 var exampleCommand = new QuantCommand()
 {
-    Name = "example",
-    Description = "Example Command",
-    OnCommandExecution = new OnCommandExecutionHandler((ref QuantCore quantCore, string s) =>
+    Name = "example_name",
+    Description = "Example Description",
+    OnCommandExecution = (ref QuantCore core, string s) =>
     {
         return "Output";
     }
 }
 ```
-**or**
+Second:
 ```cs
+var exampleCommand = new Command();
+
 public class Command : IQuantCommand
 {
     public string Name { get; set; } = "example";
     public string Description { get; set; } = "Example Command";
-    public string Execute(ref QuantCore core, string args)
+    public string Execute(ref QuantCore core, string s)
     {
         return "Output";
     };
 }
 ```
-# Merge QuantCore with other
+
+You can handle case when command is NOT found:
+```cs
+core.OnNoCommandFoundEvent = (string cmd) => 
+{
+    // Logic here
+};
+```
+
+**Custom I/O**
+
+Input:
+```cs
+// core is QuantCore
+core.OnInputEvent = () =>
+{
+    // Logic of your input.
+    return "result";
+};
+```
+
+Output:
+```cs
+core.OnOutputEvent = (string smth) => 
+{
+    // Logic of your output
+};
+```
+
+**Merge QuantCores**
+
 ```cs
 core.MergeWith(otherCore);
 ```
-**or**
+or
 ```cs
-core.MergeWith(addressOfQuantServerHere);
+core.MergeWith("addres of QuantServer here");
 ```
-**or**
+or
 ```cs
-QuantCore.MergeCores(firstCore, secondCore); // returns new QuantCore
+QuantCore.MergeCores(firstCore, secondCore);
 ```
-# You can also make custom I/O
-**Input:**
+ATTENTION! Pins DOESN'T merge.
+
+**Pins**
+
+You can 'pin' other objects to QuantCore and use them in commands
+
 ```cs
-core.OnInputEvent += new OnInputEventHandler(() =>
-{
-    // Logic of your input. Also you must return string.
-});
-```
-**Output:**
-```cs
-core.OnOutputEvent += new OnOutputEventHandler((string output) =>
-{
-    // Logic of your output
-});
+core.AddPin(AnyObject, "name of this pin");
 ```
 
-# Notifications
-**Send notification:**
+There is how you can use it:
+
 ```cs
-core.GetNotification(new Notification("Title", "Description", SomeData, Sender)); // SomeData and Sender are not necessary
+var exampleCommand = new QuantCommand()
+{
+    Name = "example_name",
+    Description = "Example Description",
+    OnCommandExecution = (ref QuantCore core, string s) =>
+    {
+	// returns value of Pin with a name equal to the value of 's'
+        return $"{core.Pins[s].Value}";
+    }
+}
+```
+
+**Notifications**
+
+Send notification:
+```cs
+core.GetNotification(new Notification("Title", "Description", Data, Sender)); // Data and Sender can be null
 ```
 
 **Custom notification handler:**
 ```cs
-core.OnNotificationEvent += new OnNotificationEventHandler((ref QuantCore core, ref Notification notification) =>
+core.OnNotificationEvent = (ref QuantCore core, ref Notification notification) =>
 {
     // Logic of your notification handler
-});
+};
+```
+
+# QuantCore
+
+**How to create:**
+
+```cs
+var commands = new List<IQuantCommand>();
+bool useMultithreading = false; // Replace with 'true' if you want to use multi threading
+var core = new QuantCore(commands, "Name of your program", "Version of your program", useMultithreading);
+```
+
+**How to use**
+
+you can launch it by method `Launch` but also you can execute commands without QuantCore being launched
+```cs
+core.Launch();
+```
+or
+```cs
+core.ExecuteCommand("any command");
+```
+
+**Request sending**
+
+You can send request to QuantServer by method `SendRequest`
+```cs
+core.SendRequest("command (can be empty if request type is GetInfo)", "address of QuantCore", QuantRequestType.GetInfo/ExecuteCommand);
+```
+
+And also you can make your own request sender:
+```cs
+core.OnRequestSendingEvent = (string cmd, string address, QuantRequestType quantRequest) => 
+{
+    // Logic here
+    return "result";
+};
 ```
 
 # Quant Server
 
-**How to create Quant Server**
+**How to create:**
+
 ```cs
-using Quant.cs;
 var commands = new List<IQuantCommand>();
 string host = "http://127.0.0.1:8080/"; // Replace 'http://127.0.0.1:8080/' with other if necessary
 var core = new QuantCore(commands, "Name of your Quant Server", "Version of your Quant Server", false, host);
-core.Launch(); // Start server
 ```
 
-**Custom request handler:**
+**How to use**
+
+Start server:
 ```cs
-// core is server-side
-core.OnRequestEvent = new OnRequestHandler((ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore) =>
+core.Launch();
+```
+
+**Custom request handler**
+```cs
+core.OnRequestEvent = (ref HttpListenerRequest request, ref HttpListenerResponse response, ref HttpListenerContext context, ref HttpListener server, ref ServerQuantCore quantCore) =>
 {
     // Logic of your request handler
-});
-```
-
-**How to send request to Quant Server**
-```cs
-// core is client-side
-core.SendRequest("command", "request uri"); // Returns response
-```
-or you can create your own request-sender:
-**Custom request sender:**
-```cs
-// core is client-side
-core.OnRequestSendingEvent = new OnRequestSendingHandler((string cmd, string address, QuantRequestType quantRequest) =>
-{
-    // Logic here
-});
+};
 ```
