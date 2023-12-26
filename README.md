@@ -96,7 +96,7 @@ core.OnRequestEvent = new OnRequestHandler((ref HttpListenerRequest request, ref
 // core is client-side
 core.SendRequest("command", "request uri"); // Returns response
 ```
-or you can create your own request-sender
+or you can create your own request-sender:
 **Custom request sender:**
 ```cs
 // core is client-side
