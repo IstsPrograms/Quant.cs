@@ -157,64 +157,64 @@ public class QuantCore
 
     public virtual void ExecuteCommand(string command)
     {
-        foreach (var cmd in Commands)
+        IQuantCommand? cmd = Commands.Find(x => x.Name.ToLowerInvariant().Equals(command.Split()[0]));
+        if (cmd != null)
         {
-            if (cmd.Name.ToLower().Equals(command.Split()[0]))
+            QuantCore quant = this;
+            var args = command.Replace($"{command.Split()[0]} ", ""); // Remove command name from input
+            try
             {
-
-                QuantCore quant = this;
-                var args = command.Replace($"{command.Split()[0]} ", ""); // Remove command name from input
-                try
-                {
-                    string result = cmd.Execute(ref quant, args);
-                    InvokeOutput(result);
-                }
-                catch (Exception exception)
-                {
-                    InvokeOutput("Information:");
-                    InvokeOutput($"Command {cmd.Name.ToLowerInvariant()} caused Exception\nMessage: {exception.Message}\nArgs: {command.Replace($"{command.Split()[0]} ", "")}");
-                    _warnings += 1;
-                    // If there is 3 or more warnings, then change Commands to previous state (If there is one)
-                    if (_warnings >= 3)
-                    {
-                        if (_snapshots.TryPop(out List<IQuantCommand>? changeCommands))
-                        {
-                            lock (Commands)
-                            {
-                                Commands = changeCommands;
-                                InvokeOutput("List with commands changed to previous one");
-                            }
-                            return;
-                        }
-                        else
-                        {
-                            // If there is no any previous state of Commands, then close Quant.cs
-                            _launched = false;
-                            Console.WriteLine("Closing Quant.cs");
-                        }
-                    }
-                }
-                lock (Commands)
-                {
-                    if (quant.Commands != Commands)
-                    {
-                        _snapshots.Push(new(Commands));
-                        Commands = quant.Commands; // Synchronization
-                    }
-                }
-                lock(Pins)
-                {
-                    if(quant.Pins != Pins)
-                    {
-                        Pins = quant.Pins;
-                    }
-                }
-                return;
+                string result = cmd.Execute(ref quant, args);
+                InvokeOutput(result);
             }
+            catch (Exception exception)
+            {
+                InvokeOutput("Information:");
+                InvokeOutput($"Command {cmd.Name.ToLowerInvariant()} caused Exception\nMessage: {exception.Message}\nArgs: {command.Replace($"{command.Split()[0]} ", "")}");
+                _warnings += 1;
+                // If there is 3 or more warnings, then change Commands to previous state (If there is one)
+                if (_warnings >= 3)
+                {
+                    if (_snapshots.TryPop(out List<IQuantCommand>? changeCommands))
+                    {
+                        lock (Commands)
+                        {
+                            Commands = changeCommands;
+                            InvokeOutput("List with commands changed to previous one");
+                        }
+                        return;
+                    }
+                    else
+                    {
+                        // If there is no any previous state of Commands, then close Quant.cs
+                        _launched = false;
+                        Console.WriteLine("Closing Quant.cs");
+                    }
+                }
+            }
+            lock (Commands)
+            {
+                if (quant.Commands != Commands)
+                {
+                    _snapshots.Push(new(Commands));
+                    Commands = quant.Commands; // Synchronization
+                }
+            }
+            lock (Pins)
+            {
+                if (quant.Pins != Pins)
+                {
+                    Pins = quant.Pins;
+                }
+            }
+            return;
         }
-        if(OnNoCommandFoundEvent != null)
+        else
         {
-            OnNoCommandFoundEvent.Invoke(command.Split()[0]);
+            if (OnNoCommandFoundEvent != null)
+            {
+                OnNoCommandFoundEvent.Invoke(command.Split()[0]);
+            }
         }
     }
 
@@ -369,43 +369,47 @@ public class ServerQuantCore : QuantCore
 
     public new string ExecuteCommand(string command)
     {
-        foreach (var cmd in Commands)
+        IQuantCommand? cmd = Commands.Find(x => x.Name.ToLowerInvariant().Equals(command.Split()[0]));
+        if (cmd != null)
         {
-            if (cmd.Name.ToLower().Equals(command.Split()[0]))
+            QuantCore quant = this;
+            var args = command.Replace($"{command.Split()[0]} ", ""); // Remove command name from input
+            try
             {
-
-                QuantCore quant = this;
-                var args = command.Replace($"{command.Split()[0]} ", ""); // Remove command name from input
-                try
+                string result = cmd.Execute(ref quant, args);
+                return result;
+            }
+            catch (Exception exception)
+            {
+                InvokeOutput("Information:");
+                InvokeOutput($"Command {cmd.Name.ToLowerInvariant()} caused Exception\nMessage: {exception.Message}\nArgs: {command.Replace($"{command.Split()[0]} ", "")}");
+                _warnings += 1;
+                // If there is 3 or more warnings, then change Commands to previous state (If there is one)
+                if (_warnings >= 3)
                 {
-                    string result = cmd.Execute(ref quant, args);
-                    return result;
-                }
-                catch (Exception exception)
-                {
-                    InvokeOutput("Information:");
-                    InvokeOutput($"Command {cmd.Name.ToLowerInvariant()} caused Exception\nMessage: {exception.Message}\nArgs: {command.Replace($"{command.Split()[0]} ", "")}");
-                    _warnings += 1;
-                    // If there is 3 or more warnings, then change Commands to previous state (If there is one)
-                    if (_warnings >= 3)
+                    if (_snapshots.TryPop(out List<IQuantCommand>? changeCommands))
                     {
-                        if (_snapshots.TryPop(out List<IQuantCommand>? changeCommands))
-                        {
-                            Commands = changeCommands;
-                            InvokeOutput("List with commands changed to previous one");
-                            return "EXCEPTION";
-                        }
-                        else
-                        {
-                            // If there is no any previous state of Commands, then close Quant.cs
-                            _launched = false;
-                            Console.WriteLine("Closing Quant.cs");
-                        }
+                        Commands = changeCommands;
+                        InvokeOutput("List with commands changed to previous one");
+                        return "EXCEPTION";
                     }
+                    else
+                    {
+                        return "EXCEPTION";
+                    }
+                }
+                else
+                {
+                    return "EXCEPTION";
                 }
             }
         }
-        return "NO COMMAND FOUND";
+        else 
+        {
+            return "NO COMMAND FOUND";
+        }
+        
+        
     }
 
 
